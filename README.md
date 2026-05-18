@@ -1,47 +1,53 @@
 # workflow-setup
 
-Repositório de **planejamento** para um template de processo de trabalho com agentes de IA, agnóstico de runner (Cursor, Claude Code, Codex, etc.) e de stack.
+Template **GitHub** para uma pipeline de code review em quatro camadas, agnóstica de stack e portátil entre runners de IA (Claude, Cursor, Codex).
 
-> Status atual: **planejamento**. O conteúdo do template (`template/`) ainda **não foi implementado** — este repositório, por enquanto, contém apenas a documentação das decisões e do plano, capturadas durante uma sessão de conversa.
+> Status: **planejamento concluído, implementação pendente.** O conteúdo executável (Makefile, scripts, prompts, workflow de CI) ainda não foi escrito — este repositório, na captura atual, contém apenas a documentação de design que sustenta a implementação subsequente.
 
-## Objetivo
+## Para que serve
 
-Quando estiver pronto, o template servirá como ponto de partida para projetos novos. Cada projeto novo herda:
+Quando estiver pronto, este repositório será usado como **GitHub Template Repo**: o botão "Use this template" cria um novo repositório com a pipeline já cabeada. O dono do projeto-cliente preenche os placeholders da stack (comandos de `lint`, `typecheck`, `test`) e a pipeline começa a operar como gate de merge.
 
-- Um arquivo `AGENTS.md` raiz que orienta qualquer agente.
-- Um diretório `.agent/` com skills, rules e prompts (neutro entre runners).
-- Um diretório `docs/` com a documentação tradicional (arquitetura, decisões, processo) já organizada.
-- Scripts agnósticos (`review.sh`, `quality-scan.sh`, `next-steps.sh`).
-- Templates para PRDs, Proposals, ADRs.
+A pipeline em si tem **quatro camadas, executadas em ordem**:
 
-A inspiração e fonte primária de princípios é o projeto real `somos-oceano` (ver `reference/somos-oceano-mapping.md`).
+```
+1. Static  (CI, determinístico)        →  lint · typecheck · test · secret-scan
+2. AC pass (agente único, local)       →  verifica cada AC do PRD/Proposal contra o resultado da Camada 1
+3. Subagents (paralelos, local)        →  security · code-quality · (auth · db · architecture, por label)
+4. Humano  (condicional)               →  disparado por label de risco ou subagent que emite blocker
+
+→ Panorama consolidado postado no PR via `gh pr comment`.
+```
+
+A motivação dessa estrutura, a derivação de cada decisão, a árvore final do template e o sequenciamento de implementação estão em `docs/`.
 
 ## Como ler este repositório
-
-Os documentos abaixo estão numerados na ordem em que fazem sentido ler:
 
 | # | Arquivo | Para que serve |
 |---|---|---|
 | 0 | Este `README.md` | Entry point. Você está aqui. |
-| 1 | [`docs/01-context-and-goals.md`](./docs/01-context-and-goals.md) | Contexto, objetivos, audiência, princípios destilados. |
-| 2 | [`docs/02-decisions.md`](./docs/02-decisions.md) | Decisões fechadas durante a conversa, com justificativa. |
-| 3 | [`docs/03-target-structure.md`](./docs/03-target-structure.md) | Árvore final do template + mudanças vs `somos-oceano`. |
-| 4 | [`docs/04-content-plan.md`](./docs/04-content-plan.md) | Esboço do conteúdo de cada arquivo do template. |
-| 5 | [`docs/05-open-questions.md`](./docs/05-open-questions.md) | Decisões ainda em aberto. |
-| 6 | [`docs/06-implementation-order.md`](./docs/06-implementation-order.md) | Ordem sugerida de implementação. |
-| — | [`reference/somos-oceano-mapping.md`](./reference/somos-oceano-mapping.md) | Mapeamento entre o projeto real e o template. |
+| 1 | [`docs/00-overview.md`](./docs/00-overview.md) | Visão geral do projeto, audiência, princípios e mapa de leitura. |
+| 2 | [`docs/01-architecture.md`](./docs/01-architecture.md) | A pipeline em 4 camadas: o que cada uma faz, como conversam, onde rodam. |
+| 3 | [`docs/02-decisions.md`](./docs/02-decisions.md) | 24 decisões fechadas durante a sessão de design, com justificativa. |
+| 4 | [`docs/03-target-structure.md`](./docs/03-target-structure.md) | Árvore final do template e responsabilidade de cada arquivo/diretório. |
+| 5 | [`docs/04-slices.md`](./docs/04-slices.md) | Quatro slices independentes (S1–S4) com ACs, dependências e critérios de pronto. |
+| 6 | [`docs/05-open-questions.md`](./docs/05-open-questions.md) | Pendências assumidas conscientemente e débitos para investigação futura. |
+| 7 | [`docs/06-glossary.md`](./docs/06-glossary.md) | Termos: camada, subagent, panorama, AC, runner, gate, etc. |
+| 8 | [`docs/07-parallel-execution.md`](./docs/07-parallel-execution.md) | Guia operacional pra executar as slices em paralelo: ownership de arquivos, kickoff prompts, regras de concorrência. |
+
+A ordem é cumulativa. Quem entra fresco pode parar em `02-decisions.md` para o contexto suficiente; quem vai executar uma slice precisa de `03-target-structure.md` + `04-slices.md` + `07-parallel-execution.md`.
 
 ## Como continuar
 
-Esta documentação foi pensada para sobreviver a um reset de contexto. Quando voltar ao trabalho, o caminho sugerido é:
+Esta documentação foi projetada para **sobreviver a um reset de contexto** e suportar **execução paralela** das slices por agentes independentes.
 
-1. **Reler** `docs/01-context-and-goals.md` e `docs/02-decisions.md` para reentrar no contexto.
-2. **Verificar pendências** em `docs/05-open-questions.md` — fechar as que ainda fazem sentido.
-3. **Escolher uma peça** de `docs/06-implementation-order.md` (1ª na ordem é `AGENTS.md`).
-4. **Aprofundar** o conteúdo dessa peça em `docs/04-content-plan.md` antes de implementar.
-5. **Implementar** dentro de `template/<caminho>/` (criar `template/` quando começar a implementação).
+1. **Reler** [`docs/00-overview.md`](./docs/00-overview.md) e [`docs/02-decisions.md`](./docs/02-decisions.md) para reentrar no contexto.
+2. **Escolher uma slice** em [`docs/04-slices.md`](./docs/04-slices.md). S1 não tem dependências; S2 depende de S1; S3 e S4 podem rodar em paralelo após S2.
+3. **Antes de escrever código**, conferir [`docs/05-open-questions.md`](./docs/05-open-questions.md) — algumas decisões pequenas foram deferidas para o momento da implementação.
+4. **Executar** a slice respeitando as ACs declaradas. Cada slice deve ser uma vertical thin — entrega valor end-to-end mesmo isolada das outras.
 
 ## Idioma
 
-- Esta documentação de planejamento: **português** (PT-BR), porque é onboarding pessoal do dono.
-- O conteúdo final do template (quando implementado): seguirá a política do `somos-oceano` — docs internos em **inglês**, docs cliente (README, CHANGELOG, user-help) em **PT-BR**.
+- **Esta documentação de planejamento**: PT-BR. Onboarding pessoal do dono.
+- **README, CHANGELOG, user-help do template final**: PT-BR. Cliente lê.
+- **Workflow internals, conventions, prompts de agentes**: EN. Padrão de mercado, runners se dão melhor.
