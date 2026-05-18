@@ -39,6 +39,22 @@ fetch_test_report() {
   find "${REPORTS_DIR}/_ci" -name 'test-results.*' -exec cp -n {} "${REPORTS_DIR}/" \; 2>/dev/null || true
 }
 
+pr_labels() {
+  gh pr view "${PR}" --json labels -q '.labels[].name' 2>/dev/null || true
+}
+
+has_label() {
+  local want="$1"
+  pr_labels | grep -qx "${want}"
+}
+
+human_review_triggers() {
+  local l
+  for l in area:auth area:secrets area:migrations area:public-read risk:high; do
+    has_label "${l}" && echo "${l}"
+  done
+}
+
 invoke_runner() {
   local _name="$1" prompt_path="$2" output_path="$3"
   local prompt
@@ -47,7 +63,11 @@ invoke_runner() {
   prompt="${prompt//\{\{OUTPUT_PATH\}\}/${output_path}}"
 
   if [[ "${DRY_RUN:-0}" == "1" ]]; then
-    printf '## AC pass\n\n| AC | Status | Notes |\n|----|--------|-------|\n| AC-1 | pass | dry-run |\n\nVERDICT: ✅ ok\n' >"${output_path}"
+    if [[ "${_name}" == "AC pass" ]]; then
+      printf '## AC pass\n\n| AC | Status | Notes |\n|----|--------|-------|\n| AC-1 | pass | dry-run |\n\nVERDICT: ✅ ok\n' >"${output_path}"
+    else
+      printf '## %s\n\n(dry-run)\n\nVERDICT: ✅ ok\n' "${_name}" >"${output_path}"
+    fi
     return 0
   fi
 

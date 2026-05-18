@@ -8,6 +8,7 @@ source "${ROOT}/scripts/lib/review-common.sh"
 RUNNER="claude"
 PR=""
 DRY_RUN="${WORKFLOW_SETUP_DRY_RUN:-0}"
+SUBAGENT_TIMEOUT="${SUBAGENT_TIMEOUT:-300}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,17 +34,68 @@ run_ac_pass() {
   echo "${out}"
 }
 
-AC_OUT="$(run_ac_pass "${PR}" "${RUNNER}" "${REVIEWS_DIR}")"
+run_subagent() {
+  local name="$1" out="$2"
+  if timeout "${SUBAGENT_TIMEOUT}" bash -c "
+    source '${ROOT}/scripts/lib/review-common.sh'
+    PR='${PR}'; RUNNER='${RUNNER}'; DRY_RUN='${DRY_RUN}'
+    invoke_runner '${name}' '${AGENTS_DIR}/prompts/${name}.md' '${out}'
+  "; then
+    return 0
+  fi
+  printf '## %s\n\nmanual-review-required (timeout or runner failure)\n\nVERDICT: ⚠ findings\n' "${name}" >"${out}"
+}
 
-# Camada 3 — Subagents (S4 implementa)
-# TODO(S4): launch core subagents + area subagents in parallel, wait, aggregate.
-# Por enquanto: copy AC pass como panorama provisório.
+launch_layer3() {
+  local -a pids=() names=() outs=()
+  names=(security code-quality)
+  has_label area:auth && names+=(auth)
+  has_label area:db && names+=(db)
+  has_label area:architecture && names+=(architecture)
+
+  for n in "${names[@]}"; do
+    local o="${REVIEWS_DIR}/${PR}-${TS}-${n}.md"
+    outs+=("${o}")
+    run_subagent "${n}" "${o}" &
+    pids+=($!)
+  done
+  for pid in "${pids[@]}"; do wait "${pid}" || true; done
+  printf '%s\n' "${outs[@]}"
+}
+
+AC_OUT="$(run_ac_pass "${PR}" "${RUNNER}" "${REVIEWS_DIR}")"
+mapfile -t SUB_OUTS < <(launch_layer3)
+
 PANORAMA="${REVIEWS_DIR}/${PR}-${TS}-panorama.md"
+GLOBAL="✅ ok"
+HUMAN_LINE=""
+if mapfile -t triggers < <(human_review_triggers); ((${#triggers[@]})); then
+  HUMAN_LINE="Human review required: yes (gatilho: ${triggers[*]})"
+fi
+
 {
   echo '<!-- workflow-setup:review -->'
+  echo "## Global verdict"
+  [[ -n "${HUMAN_LINE}" ]] && echo "${HUMAN_LINE}"
+  echo
   cat "${AC_OUT}"
+  echo
+  for f in "${SUB_OUTS[@]}"; do
+    echo "---"
+    cat "${f}"
+    echo
+    grep -q 'VERDICT: ❌ blocker' "${f}" && GLOBAL="❌ blocker"
+    grep -q 'VERDICT: ⚠ findings' "${f}" && [[ "${GLOBAL}" != "❌ blocker" ]] && GLOBAL="⚠ findings"
+  done
+  echo "**Overall:** ${GLOBAL}"
 } >"${PANORAMA}"
 
-# Posting do panorama (S4 implementa)
-# TODO(S4): gh pr comment --edit-last com marker HTML
+if [[ "${DRY_RUN}" != "1" ]] && command -v gh >/dev/null 2>&1; then
+  if gh pr comment "${PR}" --edit-last --body-file "${PANORAMA}" 2>/dev/null; then
+    :
+  else
+    gh pr comment "${PR}" --body-file "${PANORAMA}" || true
+  fi
+fi
+
 echo "${PANORAMA}"
