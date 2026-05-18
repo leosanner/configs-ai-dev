@@ -15,7 +15,7 @@ O panorama consolidado é postado no PR via `gh pr comment` (implementado em S4)
 
 Configure os placeholders no `Makefile` (`lint`, `typecheck`, `test`). O target `test` deve gerar `.reports/test-results.xml` ou `.reports/test-results.json`.
 
-CI: `.github/workflows/ci.yml` (S2).
+CI: `.github/workflows/ci.yml` roda em todo PR e push em `main`. Artifacts: `test-results-<sha>`, `gitleaks-<sha>`. Concurrency cancela runs anteriores na mesma branch.
 
 ## Camada 2
 

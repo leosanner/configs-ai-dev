@@ -10,3 +10,4 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 ### Adicionado
 
 - Esqueleto do template: Makefile, scripts stub, docs operacionais e PR template (S1).
+- Workflow CI (Camada 1), CODEOWNERS exemplo e guia de branch protection (S2).
